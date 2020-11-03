@@ -106,10 +106,10 @@ namespace Microsoft.NET.Sdk.WorkloadManifestReader
                     continue;
                 }
 
-                var packInfo = CreatePackInfo(pack.Value);
-                if (PackExists(packInfo))
+                var aliasedPath = GetAliasedPathPath(pack.Value);
+                if (PackExists(aliasedPath, pack.Value.Kind))
                 {
-                    yield return packInfo;
+                    yield return CreatePackInfo(pack.Value, aliasedPath);
                 }
             }
         }
@@ -125,34 +125,33 @@ namespace Microsoft.NET.Sdk.WorkloadManifestReader
             this._platformIds = platformIds;
         }
 
-        private PackInfo CreatePackInfo(WorkloadPack pack)
+        private string GetAliasedPathPath(WorkloadPack pack)
         {
             var aliasedId = pack.TryGetAliasForPlatformIds(_platformIds) ?? pack.Id;
-            var packPath = GetPackPath(_dotNetRootPath, aliasedId, pack.Version, pack.Kind);
+            return GetPackPath(_dotNetRootPath, aliasedId, pack.Version, pack.Kind);
+        }
 
-            return new PackInfo(
+        private PackInfo CreatePackInfo(WorkloadPack pack, string aliasedPath) => new PackInfo(
                 pack.Id.ToString(),
                 pack.Version,
                 pack.Kind,
-                packPath
+                aliasedPath
             );
-        }
-        
 
-        private bool PackExists (PackInfo packInfo)
+        private bool PackExists (string packPath, WorkloadPackKind packKind)
         {
-            switch (packInfo.Kind)
+            switch (packKind)
             {
                 case WorkloadPackKind.Framework:
                 case WorkloadPackKind.Sdk:
                 case WorkloadPackKind.Tool:
                     //can we do a more robust check than directory.exists?
-                    return _directoryExistOverride?.Invoke(packInfo.Path) ?? Directory.Exists(packInfo.Path);
+                    return _directoryExistOverride?.Invoke(packPath) ?? Directory.Exists(packPath);
                 case WorkloadPackKind.Library:
                 case WorkloadPackKind.Template:
-                    return _fileExistOverride?.Invoke(packInfo.Path) ?? File.Exists(packInfo.Path);
+                    return _fileExistOverride?.Invoke(packPath) ?? File.Exists(packPath);
                 default:
-                    throw new ArgumentException($"The package kind '{packInfo.Kind}' is not known", nameof(packInfo));
+                    throw new ArgumentException($"The package kind '{packKind}' is not known", nameof(packKind));
             }
         }
 
@@ -270,7 +269,7 @@ namespace Microsoft.NET.Sdk.WorkloadManifestReader
 
             if (_packs.TryGetValue(new WorkloadPackId (packId), out var pack))
             {
-                return CreatePackInfo(pack);
+                return CreatePackInfo(pack, GetAliasedPathPath(pack));
             }
 
             return null;
